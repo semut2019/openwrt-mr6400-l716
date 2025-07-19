@@ -1,0 +1,70 @@
+name: Build OpenWRT Custom (Fibocom L716)
+
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 180
+
+    steps:
+    - name: Checkout source
+      uses: actions/checkout@v4
+
+    - name: Install build dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y build-essential ccache ecj file g++ gawk \
+        gettext git libncurses-dev libssl-dev python3 unzip wget zlib1g-dev
+
+    - name: Clone OpenWRT source
+      run: |
+        git clone https://git.openwrt.org/openwrt/openwrt.git openwrt
+        cd openwrt
+        git checkout v22.03.5
+
+    - name: Copy custom .config
+      run: |
+        cp .config openwrt/.config
+
+    - name: Update feeds
+      run: |
+        cd openwrt
+        ./scripts/feeds update -a
+        ./scripts/feeds install -a
+
+    - name: Apply patches (if any)
+      run: |
+        cd openwrt
+        if [ -d ../patches ]; then
+          for patch in ../patches/*.patch; do
+            [ -e "$patch" ] || continue
+            echo "Applying $patch"
+            patch -p1 < "$patch"
+          done
+        fi
+
+    - name: Copy custom DTS (if any)
+      run: |
+        cd openwrt
+        if [ -d ../dts ]; then
+          find ../dts -name "*.dts" | while read dts; do
+            name=$(basename "$dts")
+            cp "$dts" target/linux/ramips/dts/"$name"
+          done
+        fi
+
+    - name: Make defconfig & build
+      run: |
+        cd openwrt
+        make defconfig
+        make -j$(nproc) V=s
+
+    - name: Upload firmware artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: firmware
+        path: |
+          openwrt/bin/targets/**/openwrt-*.bin
