@@ -67,4 +67,4 @@ jobs:
       with:
         name: firmware
         path: |
-          openwrt/bin/targets/**/openwrt-*.bin
+          openwrt/bin/targets/
