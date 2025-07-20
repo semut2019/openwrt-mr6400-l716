@@ -32,8 +32,8 @@ jobs:
     - name: Update feeds
       run: |
         cd openwrt
-        ./scripts/feeds update -a
-        ./scripts/feeds install -a
+        ./scripts/feeds update -a || true
+        ./scripts/feeds install -a || true
 
     - name: Apply patches (if any)
       run: |
@@ -66,5 +66,4 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: firmware
-        path: |
-          openwrt/bin/targets/
+        path: openwrt/bin/targets/
