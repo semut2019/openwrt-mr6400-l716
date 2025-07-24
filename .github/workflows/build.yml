@@ -1,55 +1,57 @@
-name: Build OpenWrt MR6400 v5 + L716 Firmware
+name: 🚀 Build OpenWrt TL-MR6400 v5 + L716 Firmware
 
 on:
   push:
-    branches:
-      - main
+  pull_request:
   workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-22.04
-    name: Compile OpenWrt
-
+    name: 🔨 Build Firmware
     steps:
-      - name: ⬇️ Checkout
+
+      - name: ⬇️ Checkout Repo
         uses: actions/checkout@v4
 
-      - name: 🛠️ Install Dependencies
+      - name: 🛠 Install Dependencies
         run: |
           sudo apt update
           sudo apt install -y build-essential clang flex bison g++ gawk \
             gcc-multilib g++-multilib gettext git libncurses-dev libssl-dev \
-            python3-distutils rsync unzip zlib1g-dev file wget python3 python2
+            python3-distutils rsync unzip zlib1g-dev file wget python3-pip
+          python3 -m pip install --upgrade pip
 
-      - name: 📥 Clone OpenWrt
+      - name: 🧰 Clone OpenWrt
         run: |
-          git clone https://github.com/openwrt/openwrt.git openwrt
+          git clone https://github.com/openwrt/openwrt.git
           cd openwrt
           git checkout v23.05.3
 
-      - name: 📦 Update & Install Feeds
+      - name: 🧩 Apply Custom Config
+        run: |
+          cd openwrt
+          cp ../.config .config
+          mkdir -p files
+          cp -r ../files/* files/ || true
+
+      - name: 📦 Update Feeds & Install
         run: |
           cd openwrt
           ./scripts/feeds update -a
           ./scripts/feeds install -a
 
-      - name: 🧱 Copy Config
-        run: cp .config openwrt/.config
-
-      - name: 🧩 Apply 128MB RAM Patch
-        run: |
-          cd openwrt
-          sed -i 's/memory = <0x0 0x8000000>/memory = <0x0 0x8000000>;/' target/linux/ramips/dts/mt7628an_tplink_tl-mr6400-v5.dts
-
-      - name: ✅ Build Image
+      - name: 🏗️ Build Firmware
         run: |
           cd openwrt
           make defconfig
-          make -j$(nproc) download world
+          make -j$(nproc) V=s
 
       - name: 📤 Upload Artifacts
+        if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: openwrt-mr6400-l716
-          path: openwrt/bin/targets/
+          name: openwrt-mr6400-l716-build
+          path: |
+            openwrt/bin/targets/**/openwrt-*
+
