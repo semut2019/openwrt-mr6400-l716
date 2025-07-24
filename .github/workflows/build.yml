@@ -1,45 +1,174 @@
-name: Build OpenWrt TL-MR6400 + L716 Firmware
+#!/bin/bash
 
-on:
-  push:
-    branches:
-      - "main"
-  workflow_dispatch:
+# =========================================
+# Auto Build OpenWrt for TP-Link TL-MR3420 v5 + Fibocom L716
+# =========================================
 
-jobs:
-  build:
-    runs-on: ubuntu-22.04
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+# Bersihkan lingkungan
+rm -rf ~/projects/openwrt
+rm -rf ~/.ccache ~/.openwrt* ~/openwrt* ~/downloads
+mkdir -p ~/projects/openwrt
+cd ~/projects/openwrt
 
-      - name: Install dependencies
-        run: |
-          sudo apt update
-          sudo apt install -y build-essential clang flex bison g++ gawk gcc-multilib \
-            g++-multilib gettext git libncurses-dev libssl-dev python3-distutils \
-            rsync unzip zlib1g-dev file wget python3 python3-pip
+# Clone OpenWrt
+git clone https://github.com/openwrt/openwrt.git .
 
-      - name: Clone OpenWrt source
-        run: |
-          git clone https://github.com/openwrt/openwrt.git openwrt
-          cd openwrt
-          ./scripts/feeds update -a
-          ./scripts/feeds install -a
+# Tambahkan patch Fibocom L7xx
+mkdir -p package/fibocom-l7xx/patches
+cp /path/to/USB-serial-option-add-Fibocom-L7xx-modules.patch package/fibocom-l7xx/patches/
+cp /path/to/usb.mk package/fibocom-l7xx/
 
-      - name: Copy custom files and config
-        run: |
-          cp -r files openwrt/files
-          cp .config openwrt/.config
+# Update dan install feeds
+./scripts/feeds update -a
+./scripts/feeds install -a
 
-      - name: Build firmware
-        run: |
-          cd openwrt
-          make defconfig
-          make -j$(nproc)
+# Generate .config
+cat > .config << EOF
+CONFIG_TARGET_ramips=y
+CONFIG_TARGET_ramips_mt76x8=y
+CONFIG_TARGET_ramips_mt76x8_DEVICE_tplink_tl-mr3420-v5=y
 
-      - name: Archive firmware
-        uses: actions/upload-artifact@v4
-        with:
-          name: OpenWrt-MR6400-L716
-          path: openwrt/bin/targets/
+CONFIG_PACKAGE_luci=y
+CONFIG_PACKAGE_luci-ssl=y
+CONFIG_PACKAGE_luci-app-firewall=y
+CONFIG_PACKAGE_luci-app-opkg=y
+CONFIG_PACKAGE_luci-proto-ppp=y
+CONFIG_PACKAGE_luci-proto-qmi=y
+
+CONFIG_PACKAGE_kmod-usb-net=y
+CONFIG_PACKAGE_kmod-usb-net-cdc-ether=y
+CONFIG_PACKAGE_kmod-usb-net-qmi-wwan=y
+CONFIG_PACKAGE_kmod-usb-serial=y
+CONFIG_PACKAGE_kmod-usb-serial-option=y
+CONFIG_PACKAGE_kmod-usb-acm=y
+CONFIG_PACKAGE_kmod-usb2=y
+CONFIG_PACKAGE_kmod-usb-ohci=y
+CONFIG_PACKAGE_usb-modeswitch=y
+CONFIG_PACKAGE_usbutils=y
+
+CONFIG_PACKAGE_uqmi=y
+CONFIG_PACKAGE_chat=y
+CONFIG_PACKAGE_comgt=y
+CONFIG_PACKAGE_ppp=y
+CONFIG_PACKAGE_ppp-mod-pppoe=y
+CONFIG_PACKAGE_qmidebug=y
+
+CONFIG_PACKAGE_block-mount=y
+CONFIG_PACKAGE_kmod-fs-ext4=y
+CONFIG_PACKAGE_kmod-fs-vfat=y
+CONFIG_PACKAGE_mount-utils=y
+
+CONFIG_PACKAGE_htop=y
+CONFIG_PACKAGE_curl=y
+CONFIG_PACKAGE_openssh-sftp-server=y
+
+CONFIG_PACKAGE_kmod-leds-gpio=y
+CONFIG_PACKAGE_kmod-gpio-button-hotplug=y
+CONFIG_PACKAGE_watchcat=y
+CONFIG_PACKAGE_luci-app-watchcat=y
+
+CONFIG_DEVEL=y
+CONFIG_BUILD_LOG=y
+EOF
+
+# Terapkan konfigurasi
+make defconfig
+
+# Tambahkan konfigurasi default (network, WiFi, firewall)
+mkdir -p files/etc/config
+
+cat > files/etc/config/network << EOF
+config interface 'loopback'
+	option device 'lo'
+	option proto 'static'
+	option ipaddr '127.0.0.1'
+	option netmask '255.0.0.0'
+
+config globals 'globals'
+	option ula_prefix 'fd00::/48'
+
+config device
+	option name 'br-lan'
+	option type 'bridge'
+	list ports 'eth0.1'
+
+config interface 'lan'
+	option device 'br-lan'
+	option proto 'static'
+	option ipaddr '192.168.15.1'
+	option netmask '255.255.255.0'
+	option ip6assign '60'
+
+config interface 'wan'
+	option device 'eth0.2'
+	option proto 'dhcp'
+
+config interface 'wan6'
+	option device 'eth0.2'
+	option proto 'dhcpv6'
+EOF
+
+cat > files/etc/config/wireless << EOF
+config wifi-device 'radio0'
+	option type 'mac80211'
+	option path 'platform/10300000.wmac'
+	option channel '6'
+	option band '2g'
+	option htmode 'HT20'
+	option country 'US'
+
+config wifi-iface 'default_radio0'
+	option device 'radio0'
+	option network 'lan'
+	option mode 'ap'
+	option ssid 'OpenWrt'
+	option encryption 'psk2'
+	option key 'openwrtnya'
+EOF
+
+cat > files/etc/config/firewall << EOF
+config defaults
+	option syn_flood	1
+	option input		ACCEPT
+	option output		ACCEPT
+	option forward		REJECT
+
+config zone
+	option name		lan
+	list   network		'lan'
+	option input		ACCEPT
+	option output		ACCEPT
+	option forward		ACCEPT
+
+config zone
+	option name		wan
+	list   network		'wan'
+	list   network		'wan6'
+	option input		REJECT
+	option output		ACCEPT
+	option forward		REJECT
+	option masq		1
+	option mtu_fix		1
+
+config forwarding
+	option src		lan
+	option dest		wan
+EOF
+
+# Tambahkan script ping modem dan koneksi
+mkdir -p files/root/bin
+cat > files/root/bin/modem-status.sh << EOF
+#!/bin/sh
+
+IFACE="wwan0"
+
+if ping -I \$IFACE -c 2 8.8.8.8 >/dev/null; then
+  echo "✅ Modem is online"
+else
+  echo "❌ Modem offline"
+fi
+EOF
+chmod +x files/root/bin/modem-status.sh
+
+# Jalankan build
+make -j$(nproc)
