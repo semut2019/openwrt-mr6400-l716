@@ -1,57 +1,38 @@
-name: 🚀 Build OpenWrt TL-MR6400 v5 + L716 Firmware
+name: Build OpenWrt for MR6400 v5 + L716
 
 on:
-  push:
-  pull_request:
   workflow_dispatch:
 
 jobs:
   build:
-    runs-on: ubuntu-22.04
-    name: 🔨 Build Firmware
+    runs-on: ubuntu-latest
     steps:
-
-      - name: ⬇️ Checkout Repo
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: 🛠 Install Dependencies
+      - name: Install Dependencies
         run: |
           sudo apt update
           sudo apt install -y build-essential clang flex bison g++ gawk \
             gcc-multilib g++-multilib gettext git libncurses-dev libssl-dev \
-            python3-distutils rsync unzip zlib1g-dev file wget python3-pip
-          python3 -m pip install --upgrade pip
+            python3-distutils rsync unzip zlib1g-dev file wget python3
 
-      - name: 🧰 Clone OpenWrt
+      - name: Clone OpenWrt
         run: |
-          git clone https://github.com/openwrt/openwrt.git
-          cd openwrt
-          git checkout v23.05.3
+          git clone https://github.com/openwrt/openwrt -b openwrt-23.05 --depth=1 source
+          cp -r files source/files
+          cp .config source/.config
 
-      - name: 🧩 Apply Custom Config
+      - name: Build Firmware
         run: |
-          cd openwrt
-          cp ../.config .config
-          mkdir -p files
-          cp -r ../files/* files/ || true
-
-      - name: 📦 Update Feeds & Install
-        run: |
-          cd openwrt
+          cd source
           ./scripts/feeds update -a
           ./scripts/feeds install -a
-
-      - name: 🏗️ Build Firmware
-        run: |
-          cd openwrt
           make defconfig
-          make -j$(nproc) V=s
+          make -j$(nproc) download world
 
-      - name: 📤 Upload Artifacts
-        if: success()
+      - name: Upload Firmware
         uses: actions/upload-artifact@v4
         with:
-          name: openwrt-mr6400-l716-build
-          path: |
-            openwrt/bin/targets/**/openwrt-*
-
+          name: openwrt-mr6400-l716
+          path: source/bin/targets/
