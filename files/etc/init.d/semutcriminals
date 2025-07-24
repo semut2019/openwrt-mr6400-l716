@@ -1,0 +1,15 @@
+#!/bin/sh /etc/rc.common
+
+START=99
+STOP=15
+
+USE_PROCD=1
+
+start_service() {
+	logger -t semutcriminals "Starting modem init script"
+	uqmi -d /dev/cdc-wdm0 --set-autoconnect enable
+}
+
+stop_service() {
+	logger -t semutcriminals "Stopping modem script"
+}
