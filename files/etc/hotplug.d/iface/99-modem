@@ -1,0 +1,3 @@
+[ "$ACTION" = "ifup" ] && [ "$INTERFACE" = "modem" ] && {
+    logger -t modem "Modem interface is up"
+}
