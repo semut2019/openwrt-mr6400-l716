@@ -1,0 +1,5 @@
+config modem 'l716'
+	option apn 'internet'
+	option auto_connect '1'
+	option signal_ping '1'
+	option enabled '1'
