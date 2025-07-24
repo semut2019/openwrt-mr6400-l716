@@ -1,26 +1,39 @@
 config interface 'loopback'
-	option ifname 'lo'
+	option device 'lo'
 	option proto 'static'
 	option ipaddr '127.0.0.1'
 	option netmask '255.0.0.0'
 
+config globals 'globals'
+	option ula_prefix 'fd00::/48'
+
 config interface 'lan'
-	option type 'bridge'
-	option ifname 'eth0.1'
+	option device 'eth0.1'
 	option proto 'static'
-	option ipaddr '192.168.15.1'
+	option ipaddr '192.168.2.1'
 	option netmask '255.255.255.0'
 	option ip6assign '60'
 
 config interface 'wan'
-	option ifname 'eth0.2'
+	option device 'eth0.3'
 	option proto 'dhcp'
 
-config interface 'wwan'
-	option proto 'qmi'
-	option device '/dev/cdc-wdm0'
-	option apn 'internet'
-	option auto '1'
-	option username ''
-	option password ''
-	option auth 'none'
+config interface 'modem'
+	option device 'eth0.4'
+	option proto 'dhcp'
+
+config device
+	option name 'eth0.1'
+	option type 'bridge'
+	list ports 'lan1'
+	list ports 'lan2'
+
+config device
+	option name 'eth0.3'
+	option type 'bridge'
+	list ports 'lan3'
+
+config device
+	option name 'eth0.4'
+	option type 'bridge'
+	list ports 'lan4'
