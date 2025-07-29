@@ -1,79 +1,30 @@
-# Nama Workflow Anda
-name: Build Minimal 
+name: Build OpenWrt TL-MR6400 v4 Firmware
 
-# Pemicu Workflow
 on:
   workflow_dispatch:
 
 jobs:
   build:
-    # Menggunakan Ubuntu 22.04 yang stabil
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
 
     steps:
-      # Langkah 1: Checkout
-      - name: Checkout repository
-        uses: actions/checkout@v4
+    - name: Checkout repo
+      uses: actions/checkout@v4
 
-      # Langkah 2: Instal dependensi
-      - name: Install build dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y build-essential clang flex bison g++ gawk gcc-multilib g++-multilib \
-          gettext git libncurses5-dev libssl-dev python3-full rsync unzip zlib1g-dev \
-          file wget
+    - name: Download ImageBuilder
+      run: |
+        wget https://downloads.openwrt.org/releases/23.05.3/targets/ramips/mt76x8/openwrt-imagebuilder-23.05.3-ramips-mt76x8.Linux-x86_64.tar.xz
+        tar -xJf openwrt-imagebuilder-23.05.3-ramips-mt76x8.Linux-x86_64.tar.xz
 
-      # Langkah 3: Unduh source code OpenWrt versi STABIL 22.03.6
-      - name: Clone OpenWrt source code
-        run: git clone https://github.com/openwrt/openwrt.git -b v22.03.6 openwrt
+    - name: Build firmware
+      run: |
+        cd openwrt-imagebuilder-23.05.3-ramips-mt76x8.Linux-x86_64
+        make image PROFILE=tplink_tl-mr6400-v4 \
+          PACKAGES="luci uhttpd luci-theme-bootstrap luci-mod-admin-full kmod-usb-net-qmi-wwan kmod-usb-serial-option kmod-usb-net-wwan uqmi modemmanager luci-proto-modemmanager" \
+          FILES="../files"
 
-      # Langkah 4: Perbarui feeds
-      - name: Update and install feeds
-        run: |
-          cd openwrt
-          ./scripts/feeds update -a
-          ./scripts/feeds install -a
-
-      # Langkah 5: Buat file .config minimalis
-      - name: Generate custom .config file
-        run: |
-          cd openwrt
-          cat <<'EOF' > .config
-          # Target Perangkat
-          CONFIG_TARGET_ramips=y
-          CONFIG_TARGET_ramips_mt76x8=y
-          CONFIG_TARGET_ramips_mt76x8_DEVICE_tplink_tl-mr3420-v5=y
-
-          # === RESEP INTI (WAJIB ADA) ===
-          CONFIG_PACKAGE_kmod-usb-net-cdc-mbim=y
-          CONFIG_PACKAGE_modemmanager=y
-          
-          # CATATAN: LuCI sengaja TIDAK disertakan untuk menghemat ruang
-          EOF
-
-      # Langkah 6: Lengkapi konfigurasi
-      - name: Expand .config with defaults
-        run: |
-          cd openwrt
-          make defconfig
-
-      # LANGKAH 6.5: HAPUS "-Werror" DARI SEMUA MAKEFILE (PERBAIKAN BUILD ERROR)
-      - name: Force disable Werror in all Makefiles
-        run: |
-          cd openwrt
-          grep -rIl --include=Makefile --include='*.mk' . -e "-Werror" | xargs sed -i 's/-Werror//g'
-
-      # Langkah 7: Build firmware (dengan -j1 V=s untuk log jelas)
-      - name: Build the firmware
-        run: |
-          cd openwrt
-          make -j1 V=s
-
-      # Langkah 8: Unggah hasil build
-      - name: Upload firmware artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: openwrt-22.03-firmware-mr3420v5-minimal
-          path: |
-            openwrt/bin/targets/ramips/mt76x8/*factory.bin
-            openwrt/bin/targets/ramips/mt76x8/*sysupgrade.bin
+    - name: Upload firmware
+      uses: actions/upload-artifact@v4
+      with:
+        name: Firmware-TL-MR6400
+        path: openwrt-imagebuilder-23.05.3-ramips-mt76x8.Linux-x86_64/bin/targets/ramips/mt76x8/*.bin
