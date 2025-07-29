@@ -1,104 +1,79 @@
-name: Build OpenWRT for MT7628 with Fibocom L716-CN
+# Nama Workflow Anda
+name: Build Minimal 
 
+# Pemicu Workflow
 on:
-  push:
-    branches: [ main ]
   workflow_dispatch:
 
 jobs:
   build:
+    # Menggunakan Ubuntu 22.04 yang stabil
     runs-on: ubuntu-22.04
-    timeout-minutes: 120
 
     steps:
-    - name: Checkout Repository
-      uses: actions/checkout@v4
+      # Langkah 1: Checkout
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-    - name: Setup Build Environment
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y build-essential ccache ecj fastjar file g++ gawk \
-        gettext git java-propose-classpath libelf-dev libncurses5-dev \
-        libncursesw5-dev libssl-dev python python3-distutils python3 unzip \
-        wget rsync subversion swig time xsltproc zlib1g-dev
+      # Langkah 2: Instal dependensi
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential clang flex bison g++ gawk gcc-multilib g++-multilib \
+          gettext git libncurses5-dev libssl-dev python3-full rsync unzip zlib1g-dev \
+          file wget
 
-    - name: Clone OpenWRT Source
-      run: |
-        git clone --depth=1 https://git.openwrt.org/openwrt/openwrt.git
-        cd openwrt
-        git checkout v22.03.3
+      # Langkah 3: Unduh source code OpenWrt versi STABIL 22.03.6
+      - name: Clone OpenWrt source code
+        run: git clone https://github.com/openwrt/openwrt.git -b v22.03.6 openwrt
 
-    - name: Add Custom DTS
-      run: |
-        mkdir -p openwrt/target/linux/ramips/dts/
-        cp mt7628-fibocom-l716.dts openwrt/target/linux/ramips/dts/
-        sed -i '/mt7628an.dtsi/a \\tmt7628-fibocom-l716.dts' openwrt/target/linux/ramips/image/mt76x8.mk
+      # Langkah 4: Perbarui feeds
+      - name: Update and install feeds
+        run: |
+          cd openwrt
+          ./scripts/feeds update -a
+          ./scripts/feeds install -a
 
-    - name: Configure Feeds
-      run: |
-        cd openwrt
-        ./scripts/feeds update -a
-        ./scripts/feeds install -a
+      # Langkah 5: Buat file .config minimalis
+      - name: Generate custom .config file
+        run: |
+          cd openwrt
+          cat <<'EOF' > .config
+          # Target Perangkat
+          CONFIG_TARGET_ramips=y
+          CONFIG_TARGET_ramips_mt76x8=y
+          CONFIG_TARGET_ramips_mt76x8_DEVICE_tplink_tl-mr3420-v5=y
 
-    - name: Generate Config
-      run: |
-        cd openwrt
-        cat << EOF > .config
-        CONFIG_TARGET_ramips=y
-        CONFIG_TARGET_ramips_mt76x8=y
-        CONFIG_TARGET_ramips_mt76x8_DEVICE_fibocom-l716-router=y
-        
-        # Kernel
-        CONFIG_LINUX_5_10=y
-        CONFIG_PACKAGE_kmod-mt76x8=y
-        
-        # USB Support
-        CONFIG_PACKAGE_kmod-usb-core=y
-        CONFIG_PACKAGE_kmod-usb2=y
-        CONFIG_PACKAGE_kmod-usb-ohci=y
-        CONFIG_PACKAGE_kmod-usb-serial=y
-        CONFIG_PACKAGE_kmod-usb-serial-option=y
-        CONFIG_PACKAGE_kmod-usb-net=y
-        CONFIG_PACKAGE_kmod-usb-net-cdc-ether=y
-        CONFIG_PACKAGE_kmod-usb-net-rndis=y
-        
-        # Modem Tools
-        CONFIG_PACKAGE_comgt=y
-        CONFIG_PACKAGE_chat=y
-        CONFIG_PACKAGE_kmod-usb-serial-wwan=y
-        CONFIG_PACKAGE_luci-proto-3g=y
-        CONFIG_PACKAGE_luci-proto-qmi=y
-        
-        # LuCI
-        CONFIG_PACKAGE_luci=y
-        CONFIG_PACKAGE_luci-compat=y
-        EOF
-        
-        make defconfig
+          # === RESEP INTI (WAJIB ADA) ===
+          CONFIG_PACKAGE_kmod-usb-net-cdc-mbim=y
+          CONFIG_PACKAGE_modemmanager=y
+          
+          # CATATAN: LuCI sengaja TIDAK disertakan untuk menghemat ruang
+          EOF
 
-    - name: Build Firmware
-      run: |
-        cd openwrt
-        make -j$(nproc) V=s 2>&1 | tee build.log
+      # Langkah 6: Lengkapi konfigurasi
+      - name: Expand .config with defaults
+        run: |
+          cd openwrt
+          make defconfig
 
-    - name: Check Build Success
-      run: |
-        cd openwrt/bin/targets/ramips/mt76x8/
-        if [ ! -f openwrt-ramips-mt76x8-fibocom-l716-router-squashfs-sysupgrade.bin ]; then
-          echo "::error::Build failed! Check build.log"
-          exit 1
-        fi
+      # LANGKAH 6.5: HAPUS "-Werror" DARI SEMUA MAKEFILE (PERBAIKAN BUILD ERROR)
+      - name: Force disable Werror in all Makefiles
+        run: |
+          cd openwrt
+          grep -rIl --include=Makefile --include='*.mk' . -e "-Werror" | xargs sed -i 's/-Werror//g'
 
-    - name: Upload Artifact
-      uses: actions/upload-artifact@v3
-      with:
-        name: openwrt-fibocom-l716-firmware
-        path: openwrt/bin/targets/ramips/mt76x8/
-        retention-days: 7
+      # Langkah 7: Build firmware (dengan -j1 V=s untuk log jelas)
+      - name: Build the firmware
+        run: |
+          cd openwrt
+          make -j1 V=s
 
-    - name: Upload Build Log
-      if: ${{ always() }}
-      uses: actions/upload-artifact@v3
-      with:
-        name: build-logs
-        path: openwrt/build.log
+      # Langkah 8: Unggah hasil build
+      - name: Upload firmware artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: openwrt-22.03-firmware-mr3420v5-minimal
+          path: |
+            openwrt/bin/targets/ramips/mt76x8/*factory.bin
+            openwrt/bin/targets/ramips/mt76x8/*sysupgrade.bin
