@@ -1,0 +1,7 @@
+#!/bin/sh -e
+# GPIO power on modem (example GPIO 513)
+echo 513 > /sys/class/gpio/export
+echo out > /sys/class/gpio/gpio513/direction
+echo 1 > /sys/class/gpio/gpio513/value
+
+exit 0
