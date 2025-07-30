@@ -1,3 +1,4 @@
 #!/bin/sh
+# Deteksi saat modem USB dicolok atau dicabut
 [ "$ACTION" = "add" ] && logger -t modem "Modem plugged in: $PRODUCT"
 [ "$ACTION" = "remove" ] && logger -t modem "Modem removed: $PRODUCT"
