@@ -8,32 +8,19 @@ config globals 'globals'
 	option ula_prefix 'fd00::/48'
 
 config interface 'lan'
-	option device 'eth0.1'
+	option device 'br-lan'
 	option proto 'static'
 	option ipaddr '192.168.2.1'
 	option netmask '255.255.255.0'
 	option ip6assign '60'
 
+config device
+	option name 'br-lan'
+	option type 'bridge'
+	list ports 'eth1'
+
 config interface 'wan'
-	option device 'eth0.3'
-	option proto 'dhcp'
-
-config interface 'modem'
-	option device 'eth0.4'
-	option proto 'dhcp'
-
-config device
-	option name 'eth0.1'
-	option type 'bridge'
-	list ports 'lan1'
-	list ports 'lan2'
-
-config device
-	option name 'eth0.3'
-	option type 'bridge'
-	list ports 'lan3'
-
-config device
-	option name 'eth0.4'
-	option type 'bridge'
-	list ports 'lan4'
+	option proto 'qmi'
+	option device '/dev/cdc-wdm0'
+	option apn 'internet'
+	option auto '1'
