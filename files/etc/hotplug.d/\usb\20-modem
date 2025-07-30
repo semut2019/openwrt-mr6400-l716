@@ -1,0 +1,3 @@
+#!/bin/sh
+[ "$ACTION" = "add" ] && logger -t modem "Modem plugged in: $PRODUCT"
+[ "$ACTION" = "remove" ] && logger -t modem "Modem removed: $PRODUCT"
