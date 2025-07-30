@@ -20,7 +20,7 @@ jobs:
 
       - name: Clone OpenWrt source
         run: |
-          git clone https://github.com/openwrt/openwrt -b v22.03 openwrt
+          git clone https://github.com/openwrt/openwrt -b openwrt-22.03 openwrt
           cp config/.config openwrt/.config
           cp -r files openwrt/files
 
