@@ -1,0 +1,28 @@
+name: Auto Commit AccessGo Build
+
+on:
+  workflow_dispatch:
+
+jobs:
+  update-firmware-config:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.PAT_TOKEN }}
+
+      - name: Configure Git
+        run: |
+          git config user.name "semut-robot"
+          git config user.email "semut1287@gmail.com"
+
+      - name: Tambah file dan modifikasi
+        run: |
+          mkdir -p device/accessgo
+          echo 'CONFIG_TARGET_ramips_mt7628_DEVICE_tplink_mr6400-v5=y' >> config/accessgo.config
+          echo '# AccessGo Custom build - ZBT layout, Fibocom ready' > device/accessgo/README.md
+          git add .
+          git commit -m "Add AccessGo ZBT-based build with Fibocom modem support"
+          git push
